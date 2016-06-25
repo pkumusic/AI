@@ -48,7 +48,7 @@ clock = pygame.time.Clock()
 font = pygame.font.SysFont("calibri",40)
 
 done = False
-while done==False:       
+while done==False:
     for event in pygame.event.get(): # User did something
         if event.type == pygame.QUIT: # If user clicked close
             done = True # Flag that we are done so we exit this loop
@@ -62,7 +62,7 @@ while done==False:
                 bar1_move = 0.
             elif event.key == K_DOWN:
                 bar1_move = 0.
-            
+
     score1 = font.render(str(bar1_score), True,(255,255,255))
     score2 = font.render(str(bar2_score), True,(255,255,255))
 
@@ -76,15 +76,15 @@ while done==False:
     screen.blit(score2,(380.,210.))
 
     bar1_y += bar1_move
-        
+
     # movement of circle
     time_passed = clock.tick(30)
     time_sec = time_passed / 1000.0
-        
+
     circle_x += speed_x * time_sec
     circle_y += speed_y * time_sec
     ai_speed = speed_circ * time_sec
-    
+
     #AI of the computer.
     if circle_x >= 305.:
         if not bar2_y == circle_y + 7.5:
@@ -94,7 +94,7 @@ while done==False:
                 bar2_y -= ai_speed
         else:
             bar2_y == circle_y + 7.5
-    
+
     if bar1_y >= 420.: bar1_y = 420.
     elif bar1_y <= 10. : bar1_y = 10.
     if bar2_y >= 420.: bar2_y = 420.
@@ -123,7 +123,10 @@ while done==False:
         speed_y = -speed_y
         circle_y = 457.5
 
+
+    # AI of Music
+
     pygame.display.update()
-            
+
 pygame.quit()
 

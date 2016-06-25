@@ -6,13 +6,16 @@
 4. Run pong.py in games folder to see if it works. I edited some file in pygames for font related issue.
 5. When it works, it would show the visualization of the game like following: ![](pics/pong.png)
 
+## My plan
+1. For 'pong.py', write an simple rule-based AI that can beat default pong AI.
 
+2. Try to deploy deep reinforcement learning on playing AI
 
+3. Try other methods.
 
+4. Thinking about possibilities for improvement.
 
-
-
-
+5. Can we have a general solution for all games? All some kind of general solution for some kinds of games.
 
 
 ## Instruction from [Daniel Slater](https://github.com/DanielSlater/PyGamePlayer)
