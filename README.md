@@ -1,9 +1,10 @@
 # Music Are Trying to Learn Game AI
 ## MAC OSX Installation
-1. Follow the instruction of Daniel Slater
-2. Missing "font module" if you use 64-bit python. Download [32-bit version](https://www.python.org/downloads/mac-osx/).
-3. Run pong.py in games folder to see if it works. I edited some file in pygames for font related issue.
-4. When it works, it would show the visualization of the game like following: ![](pics/pong.png =150*)
+1. `git clone https://github.com/pkumusic/AI.git`
+2. Follow the instruction of Daniel Slater
+3. Missing "font module" if you use 64-bit python. Download [32-bit version](https://www.python.org/downloads/mac-osx/).
+4. Run pong.py in games folder to see if it works. I edited some file in pygames for font related issue.
+5. When it works, it would show the visualization of the game like following: ![](pics/pong.png)
 
 
 
