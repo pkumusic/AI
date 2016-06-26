@@ -83,17 +83,28 @@ while done==False:
 
     circle_x += speed_x * time_sec
     circle_y += speed_y * time_sec
-    ai_speed = speed_circ * time_sec
+    ai_speed = speed_circ * time_sec # in this time length, how much an AI can move at maximum
 
     #AI of the computer.
     if circle_x >= 305.:
-        if not bar2_y == circle_y + 7.5:
+    #If the ball is in our side
+        if not bar2_y == circle_y + 7.5: # 7.5 (circle radio)
             if bar2_y < circle_y + 7.5:
                 bar2_y += ai_speed
             if  bar2_y > circle_y - 42.5:
                 bar2_y -= ai_speed
         else:
             bar2_y == circle_y + 7.5
+
+    # AI1 of Music
+    # If the ball is in our side
+    # if not bar1_y == circle_y + 7.5:  # 7.5 (circle radio)
+    #     if bar1_y < circle_y + 7.5:
+    #         bar1_y += ai_speed
+    #     if bar1_y > circle_y - 42.5:
+    #         bar1_y -= ai_speed
+    # else:
+    #     bar2_y == circle_y + 7.5
 
     if bar1_y >= 420.: bar1_y = 420.
     elif bar1_y <= 10. : bar1_y = 10.
@@ -122,9 +133,6 @@ while done==False:
     elif circle_y >= 457.5:
         speed_y = -speed_y
         circle_y = 457.5
-
-
-    # AI of Music
 
     pygame.display.update()
 
