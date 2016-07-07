@@ -19,6 +19,7 @@ sudo pip install --upgrade virtualenv
 ```
 virtualenv ve2
 alias ve2='source ~/ve2/bin/activate'
+ve2
 ```
 ### 2. Try to run pong.py in games folder
 1. If you start from a new ve as I do, you need to install numpy:
