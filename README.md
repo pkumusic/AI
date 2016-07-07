@@ -32,14 +32,15 @@ Try [this](http://pygame.org/wiki/macintosh)
 export PATH=/usr/local/bin:$PATH
 xcode-select --install
 ```
-Install [XQuartz](http://xquartz.macosforge.org/landing/)
+3. Install [XQuartz](http://xquartz.macosforge.org/landing/)
+4. Install dependent libraries
 ```
 brew link sdl
 brew link --overwrite libpng
 brew install hg sdl sdl_image sdl_mixer sdl_ttf portmidi
 pip install hg+http://bitbucket.org/pygame/pygame
 ```
-Now you should be able to run pong.py in AI/games
+5. Now you should be able to run pong.py in AI/games
 ```
 python pong.py
 ```
