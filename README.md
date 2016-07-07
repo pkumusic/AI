@@ -1,13 +1,9 @@
 # Music Are Trying to Learn Game AI
-## MAC OSX Installation
-1. `git clone https://github.com/pkumusic/AI.git`. 
-2. Follow the instruction of Daniel Slater
-3. Missing "font module" if you use 64-bit python. Download [32-bit version](https://www.python.org/downloads/mac-osx/).
-4. Run pong.py in games folder to see if it works. I edited some file in pygames for font related issue.
-5. When it works, it would show the visualization of the game like following: ![](pics/pong.png)
-
-
 ## Step by Step installation for MAC OSX
+To start with:
+```
+git clone https://github.com/pkumusic/AI.git
+```
 ### 1.Deploy through virtual machine
 1. I find it maybe better to deploy the environment in the virtual machine, because it would not cause version confliction between different python applications.
 2. Install virtualenv
@@ -44,6 +40,7 @@ pip install hg+http://bitbucket.org/pygame/pygame
 ```
 python pong.py
 ```
+When it works, it would show the visualization of the game like following: ![](pics/pong.png)
 ## Try [Deep-Q learning](https://www.cs.toronto.edu/~vmnih/docs/dqn.pdf)
 
 [Ref](http://www.danielslater.net/2016/03/deep-q-learning-pong-with-tensorflow.html) of Daniel Slater's blog.
