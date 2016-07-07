@@ -6,19 +6,42 @@
 4. Run pong.py in games folder to see if it works. I edited some file in pygames for font related issue.
 5. When it works, it would show the visualization of the game like following: ![](pics/pong.png)
 
-## Deploy through virtual machine
+
+## Step by Step installation for MAC OSX
+### 1.Deploy through virtual machine
 1. I find it maybe better to deploy the environment in the virtual machine, because it would not cause version confliction between different python applications.
 2. Install virtualenv
 ```
 sudo easy_install pip
 sudo pip install --upgrade virtualenv
 ```
-
-
-
-
-
-
+3. use virtualenv and activate it
+```
+virtualenv ve2
+alias ve2='source ~/ve2/bin/activate'
+```
+### 2. Try to run pong.py in games folder
+1. If you start from a new ve as I do, you need to install numpy:
+```
+pip install numpy
+```
+2. Install pygame.
+Try [this](http://pygame.org/wiki/macintosh)
+```
+export PATH=/usr/local/bin:$PATH
+xcode-select --install
+```
+Install [XQuartz](http://xquartz.macosforge.org/landing/)
+```
+brew link sdl
+brew link --overwrite libpng
+brew install hg sdl sdl_image sdl_mixer sdl_ttf portmidi
+pip install hg+http://bitbucket.org/pygame/pygame
+```
+Now you should be able to run pong.py in AI/games
+```
+python pong.py
+```
 ## Try [Deep-Q learning](https://www.cs.toronto.edu/~vmnih/docs/dqn.pdf)
 
 [Ref](http://www.danielslater.net/2016/03/deep-q-learning-pong-with-tensorflow.html) of Daniel Slater's blog.
