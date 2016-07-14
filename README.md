@@ -61,6 +61,12 @@ pip install conda
 conda install opencv
 ```
 
+* You should be able to run deep reinforcement learning on pong player as:
+ ```
+ python examples/pong_player.py
+ ```
+ You'll see the magic happens!
+
 ## My plan
 1. For 'pong.py', write an simple rule-based AI that can beat default pong AI.
 
