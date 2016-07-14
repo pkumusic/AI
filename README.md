@@ -61,16 +61,6 @@ pip install conda
 conda install opencv
 ```
 
-
-## Try [Deep-Q learning](https://www.cs.toronto.edu/~vmnih/docs/dqn.pdf)
-
-[Ref](http://www.danielslater.net/2016/03/deep-q-learning-pong-with-tensorflow.html) of Daniel Slater's blog.
-
-Install [Tensorflow](https://www.tensorflow.org/versions/r0.7/get_started/os_setup.html#pip-installation): ``
-
-
-
-
 ## My plan
 1. For 'pong.py', write an simple rule-based AI that can beat default pong AI.
 
