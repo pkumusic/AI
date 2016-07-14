@@ -41,11 +41,34 @@ pip install hg+http://bitbucket.org/pygame/pygame
 python pong.py
 ```
 When it works, it would show the visualization of the game like following: ![](pics/pong.png)
+
+### 3. Try to run deep_q_pong_player.py in examples folder
+1. Install tensorflow
+For Mac OS X, CPU only, Python 2.7:
+```
+$ export TF_BINARY_URL=https://storage.googleapis.com/tensorflow/mac/tensorflow-0.9.0-py2-none-any.whl
+sudo pip install --upgrade $TF_BINARY_URL
+```
+Test it with:
+```
+python -c 'import tensorflow'
+```
+I met conflict with numpy version here.. I do a `pip uninstall numpy` and re-upgrade tensorflow here. It will automatically install the correct numpy version for me.
+
+2. Install openCV (cv2 package in python)
+```
+pip install conda
+conda install opencv
+```
+
+
 ## Try [Deep-Q learning](https://www.cs.toronto.edu/~vmnih/docs/dqn.pdf)
 
 [Ref](http://www.danielslater.net/2016/03/deep-q-learning-pong-with-tensorflow.html) of Daniel Slater's blog.
 
 Install [Tensorflow](https://www.tensorflow.org/versions/r0.7/get_started/os_setup.html#pip-installation): ``
+
+
 
 
 ## My plan
