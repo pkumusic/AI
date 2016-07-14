@@ -5,45 +5,45 @@ To start with:
 git clone https://github.com/pkumusic/AI.git
 ```
 ### 1.Deploy through virtual machine
-1. I find it maybe better to deploy the environment in the virtual machine, because it would not cause version confliction between different python applications.
-2. Install virtualenv
+* I find it maybe better to deploy the environment in the virtual machine, because it would not cause version confliction between different python applications.
+* Install virtualenv
 ```
 sudo easy_install pip
 sudo pip install --upgrade virtualenv
 ```
-3. use virtualenv and activate it
+* use virtualenv and activate it
 ```
 virtualenv ve2
 alias ve2='source ~/ve2/bin/activate'
 ve2
 ```
 ### 2. Try to run pong.py in games folder
-1. If you start from a new ve as I do, you need to install numpy:
+* If you start from a new ve as I do, you need to install numpy:
 ```
 pip install numpy
 ```
-2. Install pygame.
+* Install pygame.
 Try [this](http://pygame.org/wiki/macintosh)
 ```
 export PATH=/usr/local/bin:$PATH
 xcode-select --install
 ```
-3. Install [XQuartz](http://xquartz.macosforge.org/landing/)
-4. Install dependent libraries
+* Install [XQuartz](http://xquartz.macosforge.org/landing/)
+* Install dependent libraries
 ```
 brew link sdl
 brew link --overwrite libpng
 brew install hg sdl sdl_image sdl_mixer sdl_ttf portmidi
 pip install hg+http://bitbucket.org/pygame/pygame
 ```
-5. Now you should be able to run pong.py in AI/games
+* Now you should be able to run pong.py in AI/games
 ```
 python pong.py
 ```
 When it works, it would show the visualization of the game like following: ![](pics/pong.png)
 
 ### 3. Try to run deep_q_pong_player.py in examples folder
-1. Install tensorflow
+* Install tensorflow
 For Mac OS X, CPU only, Python 2.7:
 ```
 $ export TF_BINARY_URL=https://storage.googleapis.com/tensorflow/mac/tensorflow-0.9.0-py2-none-any.whl
@@ -55,7 +55,7 @@ python -c 'import tensorflow'
 ```
 I met conflict with numpy version here.. I do a `pip uninstall numpy` and re-upgrade tensorflow here. It will automatically install the correct numpy version for me.
 
-2. Install openCV (cv2 package in python)
+* Install openCV (cv2 package in python)
 ```
 pip install conda
 conda install opencv
