@@ -36,6 +36,10 @@ brew link --overwrite libpng
 brew install hg sdl sdl_image sdl_mixer sdl_ttf portmidi
 pip install hg+http://bitbucket.org/pygame/pygame
 ```
+Here for the brew commends, we may need to some permission to relink. A simple way is to
+```
+sudo chmod 777 certain_file (Not safe)
+```
 * Now you should be able to run pong.py in AI/games
 ```
 python pong.py
