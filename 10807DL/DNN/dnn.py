@@ -53,7 +53,7 @@ def one_layer_NN(training_file):
     # 9. When testing, use the same W and b, do forward propagation.
     np.random.seed(2016)
     epoch = 200
-    learning_rate = 0.1
+    learning_rate = 0.5
     X, Y, y = readData(training_file)
     # Single hidden layer, we have two W's and b's
     num_d, num_h0 = X.shape[0], X.shape[1] # data number and feature number
@@ -68,26 +68,24 @@ def one_layer_NN(training_file):
     # Training
     for i in xrange(epoch):
         [_, _, _, o] = fprop(X, W1, b1, W2, b2)
+        #print o
         loss = - np.sum(np.log(o) * Y) / Y.shape[0]
         print "Average negative log-likelihood:", loss
         y_pred = predict(o)
         pre = precision(y_pred, y)
-        # print o
+        # # print o
         print pre
 
-        # SGD
-        for i in xrange(X.shape[0]):
-            x = np.reshape(X[i,:], (1,-1))
-            [a1, h1, a2, o] = fprop(x, W1, b1, W2, b2)
-            #print sum(o[1,:])
-            W2_g, b2_g, W1_g, b1_g = bprop(x, W1, b1, W2, b2, a1, h1, a2, o, Y)
-            # update
-            #print W1_g
-            W2 -= W2_g * learning_rate
-            b2 -= b2_g * learning_rate
-            W1 -= W1_g * learning_rate
-            b1 -= b1_g * learning_rate
-            #print W2_g
+        [a1, h1, a2, o] = fprop(X, W1, b1, W2, b2)
+        #print sum(o[1,:])
+        W2_g, b2_g, W1_g, b1_g = bprop(X, W1, b1, W2, b2, a1, h1, a2, o, Y)
+        # update
+        #print W1_g
+        W2 -= W2_g * learning_rate
+        b2 -= b2_g * learning_rate
+        W1 -= W1_g * learning_rate
+        b1 -= b1_g * learning_rate
+        #print W2_g
 
 
     # Testing
@@ -104,7 +102,7 @@ def precision(y_pred, y):
     return pre
 
 def fprop(X, W1, b1, W2, b2):
-    g = ReLU # activation function
+    g = sigmoid
     a1 = np.dot(X, W1) + b1
     h1 = g(a1)
     a2 = np.dot(h1, W2) + b2
@@ -114,25 +112,35 @@ def fprop(X, W1, b1, W2, b2):
 def bprop(X, W1, b1, W2, b2, a1, h1, a2, o, Y):
     # computer gradients
     # softmax loss is defaulted here
-    num_data = Y.shape[0]
+    num_data = X.shape[0]
 
-    a2_g = np.reshape(np.sum(o - Y, axis=0) / num_data, (1,-1)) # gradient of softmax loss [1 * o]
+    a2_g = (o - Y) / num_data # gradient of softmax loss [data * o]
     #print h1.shape
     #print a2_g.shape
 
-    W2_g = np.dot(np.reshape(h1, (-1,1)), a2_g) # [h1 * data] [data * o]
-    b2_g = a2_g # [1 * o]
+    W2_g = np.dot(h1.T, a2_g) # [h1 * data] [data * o]
+    b2_g = np.sum(a2_g, axis=0, keepdims=True) # [1 * o]
 
-    h1_g = np.dot(a2_g,np.transpose(W2)).reshape(1,-1)
-    a1_g = ReLU_grad(h1_g)
-    W1_g = np.dot(np.reshape(X, (-1,1)), a1_g)
-    b1_g = a1_g # [1 * o]
+    h1_g = np.dot(a2_g, W2.T)  # [data * o, o * h1]
+    a1_g = h1_g * sigmoid_grad(a1)
+    # a1_g = h1_g * (1-np.power(h1,2))  # [data * h1]
+    W1_g = np.dot(X.T, a1_g) # [h0 * h1]
+    b1_g = np.sum(a1_g, axis=0, keepdims=True) # [1 * o]
 
     return W2_g, b2_g, W1_g, b1_g
 
 def softmax(X):
     # Softmax Function
-    return np.exp(X) / np.sum(np.exp(X), axis=1).reshape(-1,1)
+    return np.exp(X) / np.sum(np.exp(X), axis=1, keepdims=True)
+
+def sigmoid(X):
+    # f = np.vectorize(lambda x: 1 / (1 + np.exp(-x)), otypes=[np.float])  # ReLU function
+    # return f(X)
+    #X = np.clip(X, -500, 500)
+    return 1 / (1+np.exp(-X))
+
+def sigmoid_grad(X):
+    return sigmoid(X) * sigmoid(1-X)
 
 def ReLU(X):
     # Rectified Linear Activation function
