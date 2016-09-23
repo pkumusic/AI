@@ -38,12 +38,16 @@ def plotData(X):
         plt.imshow(image, cmap='Greys_r')
         plt.show()
 
-def train_one_layer(training_file, epoch=200, learning_rate=0.5, seed=2016, hidden_size=[100],
-                    output_size=10, show_stats=True, val_file=None,test_file=None,
-                    L2=False):
+def train_one_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden_size=[200],
+                    output_size=10, show_stats=True, val_file=None, test_file=None,
+                    L=False, L_lambda=0, plot=True, display_epoch=10, momentum=0.5, dropout=0.5):
     model = {}
     np.random.seed(seed)
-    X, Y, y = readData(training_file)
+    X, Y, y = readData(train_file)
+    if val_file:
+        X_val, Y_val, y_val = readData(val_file)
+    if test_file:
+        X_test, Y_test, y_test = readData(test_file)
     # Single hidden layer, we have two W's and b's
     num_d, num_h0 = X.shape[0], X.shape[1] # data number and feature number
     [num_h1]  = hidden_size # hidden layer size and output layer size
@@ -54,24 +58,191 @@ def train_one_layer(training_file, epoch=200, learning_rate=0.5, seed=2016, hidd
     b1 = initialize_biases(num_h1)
     b2 = initialize_biases(num_o)
     model['W1'], model['W2'], model['b1'], model['b2'] = W1, W2, b1, b2
+    pre_W2_g, pre_b2_g, pre_W1_g, pre_b1_g = np.zeros(W2.shape),np.zeros(b2.shape),np.zeros(W1.shape), np.zeros(b1.shape)
 
+    # Stats collector
+    if show_stats:
+        loss_trains = []
+        loss_vals = []
+        err_trains = []
+        err_vals = []
     # Training
-    for i in xrange(epoch):
-        [a1, h1, a2, o] = fprop(X, model)
-        W2_g, b2_g, W1_g, b1_g = bprop(X, model, a1, h1, a2, o, Y)
-        # update
-        W2 -= W2_g * learning_rate
-        b2 -= b2_g * learning_rate
-        W1 -= W1_g * learning_rate
-        b1 -= b1_g * learning_rate
 
+    for i in xrange(epoch):
         # Show stats
         if show_stats:
-            loss = - np.sum(np.log(o) * Y) / Y.shape[0]
-            print i, "th Average negative log-likelihood:", loss
-            print precision(predict(o), y)
+            [_, _, _, o] = fprop(X, model, dropout, deterministic=True)
+            loss_train = loss(o, Y)
+            err_train = 1.0 - precision(predict(o), y)
+            #print i, "th Training loss:", loss_train
+            #print precision(predict(o), y)
+            if val_file:
+                [_, _, _, o_val] = fprop(X_val, model, dropout, deterministic=True)
+                loss_val = - np.sum(np.log(o_val) * Y_val) / Y_val.shape[0]
+                err_val = 1.0 - precision(predict(o_val), y_val)
+                loss_vals.append(loss_val)
+                err_vals.append(err_val)
 
+            if test_file:
+                [_, _, _, o_test] = fprop(X_test, model, dropout, deterministic=True)
+                loss_test = - np.sum(np.log(o_test) * Y_test) / Y_test.shape[0]
+                err_test = 1.0 - precision(predict(o_test), y_test)
+                loss_vals.append(loss_test)
+                err_vals.append(err_test)
+
+            if i % display_epoch == 0:
+                print i, "th Training loss:", loss_train
+                print precision(predict(o), y)
+                if val_file:
+                    print i, "th validation loss:", loss_val
+                    print precision(predict(o_val), y_val)
+                if test_file:
+                    print i, "th test loss:", loss_test
+                    print precision(predict(o_test), y_test)
+
+
+            loss_trains.append(loss_train)
+            err_trains.append(err_train)
+
+        [a1, h1, a2, o] = fprop(X, model, dropout)
+        # update
+        W2_g, b2_g, W1_g, b1_g = bprop(X, model, a1, h1, a2, o, Y, L=L, L_lambda=L_lambda)
+        W2 -= (W2_g + momentum * pre_W2_g) * learning_rate
+        b2 -= (b2_g + momentum * pre_b2_g) * learning_rate
+        W1 -= (W1_g + momentum * pre_W1_g) * learning_rate
+        b1 -= (b1_g + momentum * pre_b1_g) * learning_rate
+
+        pre_W2_g, pre_b2_g, pre_W1_g, pre_b1_g = W2_g, b2_g, W1_g, b1_g
+
+    if plot:
+        #plot_train_val_loss(loss_trains, loss_vals)
+        #plot_train_val_err(err_trains, err_vals)
+        plot_W(W1)
     return model
+
+
+def train_two_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden_size=[100,100],
+                    output_size=10, show_stats=True, val_file=None, test_file=None,
+                    L=False, L_lambda=0, plot=True, display_epoch=10, momentum=0.5, dropout=0.5):
+    model = {}
+    np.random.seed(seed)
+    X, Y, y = readData(train_file)
+    if val_file:
+        X_val, Y_val, y_val = readData(val_file)
+    if test_file:
+        X_test, Y_test, y_test = readData(test_file)
+    # Single hidden layer, we have two W's and b's
+    num_d, num_h0 = X.shape[0], X.shape[1] # data number and feature number
+    [num_h1, num_h2]  = hidden_size # hidden layer size and output layer size
+    num_o = output_size
+    # Initialization
+    W1 = initialize_weights(num_h0, num_h1)  # [h0 * h1]
+    W2 = initialize_weights(num_h1, num_h2)
+    W3 = initialize_weights(num_h2, num_o)
+    b1 = initialize_biases(num_h1)
+    b2 = initialize_biases(num_h2)
+    b3 = initialize_biases(num_o)
+    model['W1'], model['W2'], model['W3'], model['b1'], model['b2'], model['b3'] = W1, W2, W3, b1, b2, b3
+    pre_W2_g, pre_b2_g, pre_W1_g, pre_b1_g, pre_W3_g, pre_b3_g = np.zeros(W2.shape),np.zeros(b2.shape),np.zeros(W1.shape), np.zeros(b1.shape), np.zeros(W3.shape), np.zeros(b3.shape)
+
+    # Stats collector
+    if show_stats:
+        loss_trains = []
+        loss_vals = []
+        err_trains = []
+        err_vals = []
+    # Training
+
+    for i in xrange(epoch):
+        # Show stats
+        if show_stats:
+            [_, _, _, o] = fprop(X, model, dropout, deterministic=True)
+            loss_train = loss(o, Y)
+            err_train = 1.0 - precision(predict(o), y)
+            #print i, "th Training loss:", loss_train
+            #print precision(predict(o), y)
+            if val_file:
+                [_, _, _, o_val] = fprop(X_val, model, dropout, deterministic=True)
+                loss_val = - np.sum(np.log(o_val) * Y_val) / Y_val.shape[0]
+                err_val = 1.0 - precision(predict(o_val), y_val)
+                loss_vals.append(loss_val)
+                err_vals.append(err_val)
+
+            if test_file:
+                [_, _, _, o_test] = fprop(X_test, model, dropout, deterministic=True)
+                loss_test = - np.sum(np.log(o_test) * Y_test) / Y_test.shape[0]
+                err_test = 1.0 - precision(predict(o_test), y_test)
+                loss_vals.append(loss_test)
+                err_vals.append(err_test)
+
+            if i % display_epoch == 0:
+                print i, "th Training loss:", loss_train
+                print precision(predict(o), y)
+                if val_file:
+                    print i, "th validation loss:", loss_val
+                    print precision(predict(o_val), y_val)
+                if test_file:
+                    print i, "th test loss:", loss_test
+                    print precision(predict(o_test), y_test)
+
+
+            loss_trains.append(loss_train)
+            err_trains.append(err_train)
+
+        [a1, h1, a2, o] = fprop(X, model, dropout)
+        # update
+        W2_g, b2_g, W1_g, b1_g = bprop(X, model, a1, h1, a2, o, Y, L=L, L_lambda=L_lambda)
+        W2 -= (W2_g + momentum * pre_W2_g) * learning_rate
+        b2 -= (b2_g + momentum * pre_b2_g) * learning_rate
+        W1 -= (W1_g + momentum * pre_W1_g) * learning_rate
+        b1 -= (b1_g + momentum * pre_b1_g) * learning_rate
+
+        pre_W2_g, pre_b2_g, pre_W1_g, pre_b1_g = W2_g, b2_g, W1_g, b1_g
+
+    if plot:
+        #plot_train_val_loss(loss_trains, loss_vals)
+        #plot_train_val_err(err_trains, err_vals)
+        plot_W(W1)
+    return model
+
+
+def plot_W(W):
+    # 784 * 100
+    import matplotlib.pyplot as plt
+    import numpy.random as rnd
+    W = np.transpose(W)
+    W = np.reshape(W, (-1,28,28))
+
+    fig = plt.figure()
+    for i in xrange(W.shape[0]):
+        plt.subplot(10,10,i+1)
+        plt.axis('off')
+        plt.imshow(W[i],cmap=plt.cm.binary)
+    plt.show()
+
+
+def plot_train_val_loss(trains, vals):
+    import matplotlib.pyplot as plt
+    from matplotlib.legend_handler import HandlerLine2D
+    l1,=plt.plot(trains, label = 'Train')
+    l2,=plt.plot(vals, label = 'Validation')
+    plt.ylabel('Cross-entropy error')
+    plt.xlabel('#Epochs')
+    plt.legend()
+    plt.show()
+
+def plot_train_val_err(trains, vals):
+    import matplotlib.pyplot as plt
+    from matplotlib.legend_handler import HandlerLine2D
+    l1,=plt.plot(trains, label = 'Train')
+    l2,=plt.plot(vals, label = 'Validation')
+    plt.ylabel('Classification Error')
+    plt.xlabel('#Epochs')
+    plt.legend()
+    plt.show()
+
+def loss(predict, true):
+    return - np.sum(np.log(predict) * true) / true.shape[0]
 
 def predict(X):
     y = np.argmax(X, axis=1)
@@ -81,16 +252,24 @@ def precision(y_pred, y):
     pre = sum(y_pred == y) / len(y)
     return pre
 
-def fprop(X, model):
+def fprop(X, model, dropout, deterministic=False):
+    # Deterministic is True for testing and false for training
     W1, W2, b1, b2 = model['W1'], model['W2'], model['b1'], model['b2']
     g = sigmoid
     a1 = np.dot(X, W1) + b1
-    h1 = g(a1)
+
+    if not deterministic:
+        # Training Time
+        m1 = np.random.choice(2, a1.shape, p=[dropout, 1-dropout])
+    else:
+        m1 = np.empty(a1.shape)
+        m1.fill(1-dropout)
+    h1 = g(a1) * m1
     a2 = np.dot(h1, W2) + b2
     o  = softmax(a2)
     return [a1, h1, a2, o]
 
-def bprop(X, model, a1, h1, a2, o, Y):
+def bprop(X, model, a1, h1, a2, o, Y, L=False, L_lambda=0):
     # computer gradients
     # softmax loss is defaulted here
     W1, W2, b1, b2 = model['W1'], model['W2'], model['b1'], model['b2']
@@ -104,6 +283,11 @@ def bprop(X, model, a1, h1, a2, o, Y):
     a1_g = h1_g * sigmoid_grad(a1)
     W1_g = np.dot(X.T, a1_g) # [h0 * h1]
     b1_g = np.sum(a1_g, axis=0, keepdims=True) # [1 * o]
+
+    if L == "L2":
+        W2_g += L_lambda * 2 * W2
+    if L == "L1":
+        W2_g += L_lambda * np.sign(W2)
 
     return W2_g, b2_g, W1_g, b1_g
 
@@ -139,7 +323,14 @@ def initialize_biases(h):
 
 
 if __name__ == "__main__":
-    training_file = "data/digitstrain.txt"
-    train_one_layer(training_file)
+    train_file = "data/digitstrain.txt"
+    val_file = "data/digitsvalid.txt"
+    test_file = "data/digitstest.txt"
+    train_one_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden_size=[50],
+                    output_size=10, show_stats=True, val_file=val_file, test_file=test_file,
+                    L="L2", L_lambda=0.001, plot=True, display_epoch=10, momentum=0.5, dropout=0)
     #plotData(X)
 
+    train_two_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden_size=[100,100],
+                    output_size=10, show_stats=True, val_file=val_file, test_file=test_file,
+                    L="L2", L_lambda=0.001, plot=True, display_epoch=10, momentum=0.5, dropout=0)
