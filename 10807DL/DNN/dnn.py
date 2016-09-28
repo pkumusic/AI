@@ -73,20 +73,20 @@ def train_one_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden
         if show_stats:
             [_, _, _, o] = fprop(X, model, dropout, deterministic=True)
             loss_train = loss(o, Y)
-            err_train = 1.0 - precision(predict(o), y)
+            err_train = precision(predict(o), y)
             #print i, "th Training loss:", loss_train
             #print precision(predict(o), y)
             if val_file:
                 [_, _, _, o_val] = fprop(X_val, model, dropout, deterministic=True)
                 loss_val = - np.sum(np.log(o_val) * Y_val) / Y_val.shape[0]
-                err_val = 1.0 - precision(predict(o_val), y_val)
+                err_val = precision(predict(o_val), y_val)
                 loss_vals.append(loss_val)
                 err_vals.append(err_val)
 
             if test_file:
                 [_, _, _, o_test] = fprop(X_test, model, dropout, deterministic=True)
                 loss_test = - np.sum(np.log(o_test) * Y_test) / Y_test.shape[0]
-                err_test = 1.0 - precision(predict(o_test), y_test)
+                err_test = precision(predict(o_test), y_test)
                 loss_vals.append(loss_test)
                 err_vals.append(err_test)
 
@@ -156,22 +156,22 @@ def train_two_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden
     for i in xrange(epoch):
         # Show stats
         if show_stats:
-            [_, _, _, o] = fprop(X, model, dropout, deterministic=True)
+            [_, _, _, _, _, o] = fprop2(X, model, dropout, deterministic=True)
             loss_train = loss(o, Y)
-            err_train = 1.0 - precision(predict(o), y)
+            err_train = precision(predict(o), y)
             #print i, "th Training loss:", loss_train
             #print precision(predict(o), y)
             if val_file:
-                [_, _, _, o_val] = fprop(X_val, model, dropout, deterministic=True)
+                [_, _, _,_,_, o_val] = fprop2(X_val, model, dropout, deterministic=True)
                 loss_val = - np.sum(np.log(o_val) * Y_val) / Y_val.shape[0]
-                err_val = 1.0 - precision(predict(o_val), y_val)
+                err_val = precision(predict(o_val), y_val)
                 loss_vals.append(loss_val)
                 err_vals.append(err_val)
 
             if test_file:
-                [_, _, _, o_test] = fprop(X_test, model, dropout, deterministic=True)
+                [_, _, _,_,_, o_test] = fprop2(X_test, model, dropout, deterministic=True)
                 loss_test = - np.sum(np.log(o_test) * Y_test) / Y_test.shape[0]
-                err_test = 1.0 - precision(predict(o_test), y_test)
+                err_test = precision(predict(o_test), y_test)
                 loss_vals.append(loss_test)
                 err_vals.append(err_test)
 
@@ -189,15 +189,17 @@ def train_two_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden
             loss_trains.append(loss_train)
             err_trains.append(err_train)
 
-        [a1, h1, a2, o] = fprop(X, model, dropout)
+        [a1, h1, a2, h2, a3, o] = fprop2(X, model, dropout)
         # update
-        W2_g, b2_g, W1_g, b1_g = bprop(X, model, a1, h1, a2, o, Y, L=L, L_lambda=L_lambda)
+        W3_g, b3_g, W2_g, b2_g, W1_g, b1_g = bprop2(X, model, a1, h1, a2, h2, a3, o, Y, L=L, L_lambda=L_lambda)
+        W3 -= (W3_g + momentum * pre_W3_g) * learning_rate
+        b3 -= (b3_g + momentum * pre_b3_g) * learning_rate
         W2 -= (W2_g + momentum * pre_W2_g) * learning_rate
         b2 -= (b2_g + momentum * pre_b2_g) * learning_rate
         W1 -= (W1_g + momentum * pre_W1_g) * learning_rate
         b1 -= (b1_g + momentum * pre_b1_g) * learning_rate
 
-        pre_W2_g, pre_b2_g, pre_W1_g, pre_b1_g = W2_g, b2_g, W1_g, b1_g
+        pre_W3_g, pre_b3_g, pre_W2_g, pre_b2_g, pre_W1_g, pre_b1_g = W3_g, b3_g, W2_g, b2_g, W1_g, b1_g
 
     if plot:
         #plot_train_val_loss(loss_trains, loss_vals)
@@ -249,7 +251,7 @@ def predict(X):
     return y
 
 def precision(y_pred, y):
-    pre = sum(y_pred == y) / len(y)
+    pre = 1 - sum(y_pred == y) / len(y)
     return pre
 
 def fprop(X, model, dropout, deterministic=False):
@@ -269,6 +271,30 @@ def fprop(X, model, dropout, deterministic=False):
     o  = softmax(a2)
     return [a1, h1, a2, o]
 
+def fprop2(X, model, dropout, deterministic=False):
+    # Deterministic is True for testing and false for training
+    W1, W2, W3, b1, b2, b3 = model['W1'], model['W2'], model['W3'], model['b1'], model['b2'], model['b3']
+    g = sigmoid
+    a1 = np.dot(X, W1) + b1
+    if not deterministic:
+        # Training Time
+        m1 = np.random.choice(2, a1.shape, p=[dropout, 1-dropout])
+    else:
+        m1 = np.empty(a1.shape)
+        m1.fill(1-dropout)
+    h1 = g(a1) * m1
+    a2 = np.dot(h1, W2) + b2
+    if not deterministic:
+        # Training Time
+        m2 = np.random.choice(2, a2.shape, p=[dropout, 1-dropout])
+    else:
+        m2 = np.empty(a2.shape)
+        m2.fill(1-dropout)
+    h2 = g(a2) * m2
+    a3 = np.dot(h2, W3) + b3
+    o  = softmax(a3)
+    return [a1, h1, a2, h2, a3, o]
+
 def bprop(X, model, a1, h1, a2, o, Y, L=False, L_lambda=0):
     # computer gradients
     # softmax loss is defaulted here
@@ -286,10 +312,44 @@ def bprop(X, model, a1, h1, a2, o, Y, L=False, L_lambda=0):
 
     if L == "L2":
         W2_g += L_lambda * 2 * W2
+        W1_g += L_lambda * 2 * W1
     if L == "L1":
         W2_g += L_lambda * np.sign(W2)
+        W1_g += L_lambda * np.sign(W1)
 
     return W2_g, b2_g, W1_g, b1_g
+
+def bprop2(X, model, a1, h1, a2, h2, a3, o, Y, L=False, L_lambda=0):
+    # computer gradients
+    # softmax loss is defaulted here
+    W1, W2, W3, b1, b2, b3 = model['W1'], model['W2'], model['W3'], model['b1'], model['b2'], model['b3']
+    num_data = X.shape[0]
+
+    a3_g = (o - Y) / num_data  # gradient of softmax loss [data * o]
+    W3_g = np.dot(h2.T, a3_g)  # [h1 * data] [data * o]
+    b3_g = np.sum(a3_g, axis=0, keepdims=True)  # [1 * o]
+
+    h2_g = np.dot(a3_g, W3.T)  # [data * o, o * h1]
+    a2_g = h2_g * sigmoid_grad(a2) # gradient of softmax loss [data * o]
+    W2_g = np.dot(h1.T, a2_g) # [h1 * data] [data * o]
+    b2_g = np.sum(a2_g, axis=0, keepdims=True) # [1 * o]
+
+    h1_g = np.dot(a2_g, W2.T)  # [data * o, o * h1]
+    a1_g = h1_g * sigmoid_grad(a1)
+    W1_g = np.dot(X.T, a1_g) # [h0 * h1]
+    b1_g = np.sum(a1_g, axis=0, keepdims=True) # [1 * o]
+
+    if L == "L2":
+        W3_g += L_lambda * 2 * W3
+        W2_g += L_lambda * 2 * W2
+        W1_g += L_lambda * 2 * W1
+
+    if L == "L1":
+        W3_g += L_lambda * np.sign(W3)
+        W2_g += L_lambda * np.sign(W2)
+        W1_g += L_lambda * np.sign(W1)
+
+    return W3_g, b3_g, W2_g, b2_g, W1_g, b1_g
 
 def softmax(X):
     # Softmax Function
@@ -326,11 +386,11 @@ if __name__ == "__main__":
     train_file = "data/digitstrain.txt"
     val_file = "data/digitsvalid.txt"
     test_file = "data/digitstest.txt"
-    train_one_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden_size=[50],
+    train_one_layer(train_file, epoch=2000, learning_rate=0.1, seed=0, hidden_size=[50],
                     output_size=10, show_stats=True, val_file=val_file, test_file=test_file,
                     L="L2", L_lambda=0.001, plot=True, display_epoch=10, momentum=0.5, dropout=0)
     #plotData(X)
 
-    train_two_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden_size=[100,100],
-                    output_size=10, show_stats=True, val_file=val_file, test_file=test_file,
-                    L="L2", L_lambda=0.001, plot=True, display_epoch=10, momentum=0.5, dropout=0)
+    #train_two_layer(train_file, epoch=2000, learning_rate=0.5, seed=2016, hidden_size=[100,100],
+    #                output_size=10, show_stats=True, val_file=val_file, test_file=test_file,
+    #                L="L2", L_lambda=0.002, plot=True, display_epoch=10, momentum=0.5, dropout=0)
