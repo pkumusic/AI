@@ -1,4 +1,4 @@
-# Music Are Trying to Learn Game AI
+# Deep Reinforcement Learning Exploration
 ## Step by Step installation for MAC OSX
 To start with:
 ```
