@@ -380,15 +380,90 @@ def initialize_weights(h_prev, h):
 def initialize_biases(h):
     return np.zeros((1,h))
 
+def train_rbm(train_file, val_file=None, save_W=False, hidden_size=100, epoch=3, learning_rate=0.01, seed=1):
+    model = {}
+    np.random.seed(seed)
+    X, Y, y = readData(train_file)
+    X_val, _, _ = readData(val_file)
+    X = binarize(X)
+    num_x = X.shape[1]
+    num_h = hidden_size
+    W = initialize_weights(num_h, num_x)
+    c = initialize_biases(num_x).reshape((num_x,1)) # bias for x
+    b = initialize_biases(num_h).reshape((num_h,1)) # bias for h
+    model['W'], model['c'], model['b'] = W, c, b
+    train_losses = []
+    if val_file:
+        val_losses   = []
+    for t in xrange(epoch):
+        # SGD version
+        train_loss = cross_entropy(model, X, num_x)
+        val_loss   = cross_entropy(model, X_val, num_x)
+        train_losses.append(train_loss)
+        if val_file:
+            val_losses.append(val_loss)
+        print t, train_loss
+        for x in X:
+            x = x.reshape((num_x, 1))
+            x_neg, _ = gibbs_sampling(x, model)
+            rbm_update(model, x, x_neg, learning_rate)
+    plot_W(W.T)
+    if val_file:
+        plot_train_val_loss(train_losses, val_losses)
+    if save_W:
+        np.save("W_"+str(hidden_size)+"_"+str(learning_rate)+"_"+str(epoch), W)
+
+
+def cross_entropy(model, X, num_x):
+    W, c, b = model['W'], model['c'], model['b']
+    accum = 0
+    for x in X:
+        x = x.reshape((num_x, 1))
+        _, h = gibbs_sampling(x, model, k=1)
+        accum += np.sum(x * np.log(sigmoid(c + np.dot(W.T,h))))
+        accum += np.sum((1-x) *  np.log(1-sigmoid(c + np.dot(W.T,h))))
+    accum /= X.shape[0]
+    return -accum
+
+def rbm_update(model, x, x_neg, learning_rate):
+    W, c, b = model['W'], model['c'], model['b']
+    hx = sigmoid(b+np.dot(W,x))
+    hx_neg =sigmoid(b+np.dot(W,x_neg))
+    W += learning_rate * (np.dot(hx, x.T) - np.dot(hx_neg, x_neg.T))
+    b += learning_rate * (hx - hx_neg)
+    c += learning_rate * (x - x_neg)
+
+def gibbs_sampling(x, model, k=1):
+    W, c, b = model['W'], model['c'], model['b']
+    for i in xrange(k):
+        h = sigmoid(b + np.dot(W,x))
+        print h
+        h = np.vectorize(lambda x: np.random.binomial(1, x), h)
+        print h
+        exit()
+        #h = binarize(h)
+        x = sigmoid(c + np.dot(W.T,h))
+        #x = binarize(x)
+    return x, h
+
+def binarize(X):
+    X[X>=0.5] = 1
+    X[X<0.5]  = 0
+    return X
+
+
+
+
 
 
 if __name__ == "__main__":
-    train_file = "data/digitstrain.txt"
-    val_file = "data/digitsvalid.txt"
-    test_file = "data/digitstest.txt"
-    train_one_layer(train_file, epoch=2000, learning_rate=0.1, seed=0, hidden_size=[50],
-                    output_size=10, show_stats=True, val_file=val_file, test_file=test_file,
-                    L="L2", L_lambda=0.001, plot=True, display_epoch=10, momentum=0.5, dropout=0)
+    train_file = "../DNN/data/digitstrain.txt"
+    val_file = "../DNN/data/digitsvalid.txt"
+    test_file = "../DNN/data/digitstest.txt"
+    train_rbm(train_file, val_file=val_file, save_W=True)
+    #train_one_layer(train_file, epoch=2000, learning_rate=0.1, seed=0, hidden_size=[50],
+    #                output_size=10, show_stats=True, val_file=val_file, test_file=test_file,
+    #                L="L2", L_lambda=0.001, plot=True, display_epoch=10, momentum=0.5, dropout=0)
     #plotData(X)
 
     #train_two_layer(train_file, epoch=2000, learning_rate=0.5, seed=2016, hidden_size=[100,100],
