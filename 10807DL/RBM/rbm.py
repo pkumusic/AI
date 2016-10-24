@@ -208,7 +208,7 @@ def train_two_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden
     return model
 
 
-def plot_W(W):
+def plot_W(W, file_name):
     # 784 * 100
     import matplotlib.pyplot as plt
     import numpy.random as rnd
@@ -220,18 +220,21 @@ def plot_W(W):
         plt.subplot(10,10,i+1)
         plt.axis('off')
         plt.imshow(W[i],cmap=plt.cm.binary)
-    plt.show()
+    #plt.show()
+    fig.savefig(file_name+'_W.png')
 
 
-def plot_train_val_loss(trains, vals):
+def plot_train_val_loss(trains, vals, file_name):
     import matplotlib.pyplot as plt
     from matplotlib.legend_handler import HandlerLine2D
+    fig = plt.figure()
     l1,=plt.plot(trains, label = 'Train')
     l2,=plt.plot(vals, label = 'Validation')
     plt.ylabel('Cross-entropy error')
     plt.xlabel('#Epochs')
     plt.legend()
-    plt.show()
+    #plt.show()
+    fig.savefig(file_name+'_loss.png')
 
 def plot_train_val_err(trains, vals):
     import matplotlib.pyplot as plt
@@ -380,7 +383,7 @@ def initialize_weights(h_prev, h):
 def initialize_biases(h):
     return np.zeros((1,h))
 
-def train_rbm(train_file, val_file=None, save_W=False, batch_size=5, hidden_size=100, epoch=300, learning_rate=0.1, seed=1):
+def train_rbm(train_file, val_file=None, save_W=False, batch_size=10, hidden_size=500, epoch=300, learning_rate=0.1, seed=1, CD_k=1):
     model = {}
     np.random.seed(seed)
     X, Y, y = readData(train_file)
@@ -400,8 +403,8 @@ def train_rbm(train_file, val_file=None, save_W=False, batch_size=5, hidden_size
     if val_file:
         val_losses   = []
     for t in xrange(epoch):
-        train_loss = cross_entropy(model, X, num_x)
-        val_loss   = cross_entropy(model, X_val, num_x)
+        train_loss = cross_entropy(model, X, num_x, CD_k)
+        val_loss   = cross_entropy(model, X_val, num_x, CD_k)
         train_losses.append(train_loss)
         if val_file:
             val_losses.append(val_loss)
@@ -412,19 +415,20 @@ def train_rbm(train_file, val_file=None, save_W=False, batch_size=5, hidden_size
         for i in xrange(iter_times):
             rows = np.random.permutation(train_size)[:batch_size]
             X_ = X[:, rows]
-            X_neg, _ = gibbs_sampling(X_, model)
+            X_neg, _ = gibbs_sampling(X_, model, k=CD_k)
             rbm_update(model, X_, X_neg, learning_rate)
-    plot_W(W.T)
+    file_name = "h"+str(hidden_size)+"_l"+str(learning_rate)+"_e"+str(epoch)+"_b"+str(batch_size)+"_k"+str(CD_k)
+    #plot_W(W.T, file_name)
     if val_file:
-        plot_train_val_loss(train_losses, val_losses)
+        plot_train_val_loss(train_losses, val_losses, file_name)
     if save_W:
-        np.save("W_"+str(hidden_size)+"_"+str(learning_rate)+"_"+str(epoch), W)
+        np.save("W_"+file_name, W)
 
 
-def cross_entropy(model, X, num_x):
+def cross_entropy(model, X, num_x, CD_k):
     W, c, b = model['W'], model['c'], model['b']
     accum = 0
-    _, h = gibbs_sampling(X, model)
+    _, h = gibbs_sampling(X, model, k=CD_k)
     accum += np.sum(X * np.log(sigmoid(c + np.dot(W.T,h))))
     accum += np.sum((1-X) * np.log(1-sigmoid(c + np.dot(W.T,h))))
     # for i in xrange(X.shape[1]):
@@ -460,6 +464,71 @@ def binarize(X):
 
 
 
+def autoencoder(train_file, epoch=1000, learning_rate=0.5, seed=1, hidden_size=[100],
+                    output_size=10, show_stats=True, val_file=None, test_file=None,
+                    L=False, L_lambda=0, plot=True, display_epoch=10, momentum=0.5, dropout=0.5):
+    model = {}
+    np.random.seed(seed)
+    X, _, _ = readData(train_file)
+    Y = X  # Reconstruction
+    if val_file:
+        X_val, _, _ = readData(val_file)
+        Y_val = X_val
+    # Single hidden layer, we have two W's and b's
+    num_d, num_h0 = X.shape[0], X.shape[1] # data number and feature number
+    [num_h1]  = hidden_size # hidden layer size and output layer size
+    num_o = output_size
+    # Initialization
+    W1 = initialize_weights(num_h0, num_h1)  # [h0 * h1]
+    W2 = initialize_weights(num_h1, num_o)
+    b1 = initialize_biases(num_h1)
+    b2 = initialize_biases(num_o)
+    model['W1'], model['W2'], model['b1'], model['b2'] = W1, W2, b1, b2
+    pre_W2_g, pre_b2_g, pre_W1_g, pre_b1_g = np.zeros(W2.shape),np.zeros(b2.shape),np.zeros(W1.shape), np.zeros(b1.shape)
+
+    # Stats collector
+    if show_stats:
+        loss_trains = []
+        loss_vals = []
+        err_trains = []
+        err_vals = []
+    # Training
+
+    for i in xrange(epoch):
+        # Show stats
+        if show_stats:
+            [_, _, _, o] = fprop(X, model, dropout, deterministic=True)
+            loss_train = loss(o, Y)
+            #print i, "th Training loss:", loss_train
+            #print precision(predict(o), y)
+            if val_file:
+                [_, _, _, o_val] = fprop(X_val, model, dropout, deterministic=True)
+                loss_val = - np.sum(np.log(o_val) * Y_val) / Y_val.shape[0]
+                loss_vals.append(loss_val)
+
+            if i % display_epoch == 0:
+                print i, "th Training loss:", loss_train
+                if val_file:
+                    print i, "th validation loss:", loss_val
+            
+            loss_trains.append(loss_train)
+
+        [a1, h1, a2, o] = fprop(X, model, dropout)
+        # update
+        W2_g, b2_g, W1_g, b1_g = bprop(X, model, a1, h1, a2, o, Y, L=L, L_lambda=L_lambda)
+        W2 -= (W2_g + momentum * pre_W2_g) * learning_rate
+        b2 -= (b2_g + momentum * pre_b2_g) * learning_rate
+        W1 -= (W1_g + momentum * pre_W1_g) * learning_rate
+        b1 -= (b1_g + momentum * pre_b1_g) * learning_rate
+
+        pre_W2_g, pre_b2_g, pre_W1_g, pre_b1_g = W2_g, b2_g, W1_g, b1_g
+
+    if plot:
+        #plot_train_val_loss(loss_trains, loss_vals)
+        #plot_train_val_err(err_trains, err_vals)
+        plot_W(W1)
+    return model
+
 
 
 
@@ -467,7 +536,10 @@ if __name__ == "__main__":
     train_file = "../DNN/data/digitstrain.txt"
     val_file = "../DNN/data/digitsvalid.txt"
     test_file = "../DNN/data/digitstest.txt"
-    train_rbm(train_file, val_file=val_file, save_W=True)
+    #train_rbm(train_file, val_file=val_file, save_W=True)
+    autoencoder(train_file, epoch=2000, learning_rate=0.1, seed=0, hidden_size=[50],
+                   output_size=100, show_stats=True, val_file=val_file, test_file=None,
+                   L="L2", L_lambda=0.001, plot=True, display_epoch=10, momentum=0.5, dropout=0)
     #train_one_layer(train_file, epoch=2000, learning_rate=0.1, seed=0, hidden_size=[50],
     #                output_size=10, show_stats=True, val_file=val_file, test_file=test_file,
     #                L="L2", L_lambda=0.001, plot=True, display_epoch=10, momentum=0.5, dropout=0)
