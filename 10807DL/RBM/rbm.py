@@ -380,33 +380,35 @@ def initialize_weights(h_prev, h):
 def initialize_biases(h):
     return np.zeros((1,h))
 
-def train_rbm(train_file, val_file=None, save_W=False, hidden_size=100, epoch=3, learning_rate=0.01, seed=1):
+def train_rbm(train_file, val_file=None, save_W=False, hidden_size=100, epoch=300, learning_rate=0.1, seed=1):
     model = {}
     np.random.seed(seed)
     X, Y, y = readData(train_file)
     X_val, _, _ = readData(val_file)
-    X = binarize(X)
+    X = binarize(X)  # 3000 * 784
     num_x = X.shape[1]
     num_h = hidden_size
-    W = initialize_weights(num_h, num_x)
-    c = initialize_biases(num_x).reshape((num_x,1)) # bias for x
-    b = initialize_biases(num_h).reshape((num_h,1)) # bias for h
+    X = X.T          # 784 * 3000
+    X_val = X_val.T
+    W = initialize_weights(num_h, num_x)  # 100 * 784
+    c = initialize_biases(num_x).reshape((num_x,1)) # bias for x  # 784 * 1
+    b = initialize_biases(num_h).reshape((num_h,1)) # bias for h  # 100 * 1
     model['W'], model['c'], model['b'] = W, c, b
     train_losses = []
     if val_file:
         val_losses   = []
     for t in xrange(epoch):
-        # SGD version
+        # mini-batch version
         train_loss = cross_entropy(model, X, num_x)
         val_loss   = cross_entropy(model, X_val, num_x)
         train_losses.append(train_loss)
         if val_file:
             val_losses.append(val_loss)
         print t, train_loss
-        for x in X:
-            x = x.reshape((num_x, 1))
-            x_neg, _ = gibbs_sampling(x, model)
-            rbm_update(model, x, x_neg, learning_rate)
+        #for x in X:
+        #    x = x.reshape((num_x, 1))
+        X_neg, _ = gibbs_sampling(X, model)
+        rbm_update(model, X, X_neg, learning_rate)
     plot_W(W.T)
     if val_file:
         plot_train_val_loss(train_losses, val_losses)
@@ -417,33 +419,33 @@ def train_rbm(train_file, val_file=None, save_W=False, hidden_size=100, epoch=3,
 def cross_entropy(model, X, num_x):
     W, c, b = model['W'], model['c'], model['b']
     accum = 0
-    for x in X:
-        x = x.reshape((num_x, 1))
-        _, h = gibbs_sampling(x, model, k=1)
-        accum += np.sum(x * np.log(sigmoid(c + np.dot(W.T,h))))
-        accum += np.sum((1-x) *  np.log(1-sigmoid(c + np.dot(W.T,h))))
-    accum /= X.shape[0]
+    _, h = gibbs_sampling(X, model)
+    accum += np.sum(X * np.log(sigmoid(c + np.dot(W.T,h))))
+    accum += np.sum((1-X) * np.log(1-sigmoid(c + np.dot(W.T,h))))
+    # for i in xrange(X.shape[1]):
+    #     x = X[:, i]
+    #     x = x.reshape((num_x, 1))
+    #     _, h = gibbs_sampling(x, model, k=1)
+    #     accum += np.sum(x * np.log(sigmoid(c + np.dot(W.T,h))))
+    #     accum += np.sum((1-x) *  np.log(1-sigmoid(c + np.dot(W.T,h))))
+    accum /= X.shape[1]
     return -accum
 
 def rbm_update(model, x, x_neg, learning_rate):
     W, c, b = model['W'], model['c'], model['b']
-    hx = sigmoid(b+np.dot(W,x))
+    hx = sigmoid(b+np.dot(W,x)) # (100, 3000)
     hx_neg =sigmoid(b+np.dot(W,x_neg))
-    W += learning_rate * (np.dot(hx, x.T) - np.dot(hx_neg, x_neg.T))
-    b += learning_rate * (hx - hx_neg)
-    c += learning_rate * (x - x_neg)
+    W += learning_rate * (np.dot(hx, x.T) - np.dot(hx_neg, x_neg.T)) / x.shape[1]
+    b += np.sum(learning_rate * (hx - hx_neg), axis=1).reshape(-1,1) / x.shape[1]
+    c += np.sum(learning_rate * (x - x_neg), axis=1).reshape(-1,1) / x.shape[1]
 
 def gibbs_sampling(x, model, k=1):
     W, c, b = model['W'], model['c'], model['b']
     for i in xrange(k):
         h = sigmoid(b + np.dot(W,x))
-        print h
-        h = np.vectorize(lambda x: np.random.binomial(1, x), h)
-        print h
-        exit()
-        #h = binarize(h)
+        h = np.random.binomial(1, h)
         x = sigmoid(c + np.dot(W.T,h))
-        #x = binarize(x)
+        x = np.random.binomial(1, x)
     return x, h
 
 def binarize(X):
