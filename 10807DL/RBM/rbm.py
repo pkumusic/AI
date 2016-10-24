@@ -380,12 +380,14 @@ def initialize_weights(h_prev, h):
 def initialize_biases(h):
     return np.zeros((1,h))
 
-def train_rbm(train_file, val_file=None, save_W=False, hidden_size=100, epoch=300, learning_rate=0.1, seed=1):
+def train_rbm(train_file, val_file=None, save_W=False, batch_size=5, hidden_size=100, epoch=300, learning_rate=0.1, seed=1):
     model = {}
     np.random.seed(seed)
     X, Y, y = readData(train_file)
     X_val, _, _ = readData(val_file)
     X = binarize(X)  # 3000 * 784
+    train_size = X.shape[0]
+    iter_times = int(train_size / batch_size)
     num_x = X.shape[1]
     num_h = hidden_size
     X = X.T          # 784 * 3000
@@ -398,7 +400,6 @@ def train_rbm(train_file, val_file=None, save_W=False, hidden_size=100, epoch=30
     if val_file:
         val_losses   = []
     for t in xrange(epoch):
-        # mini-batch version
         train_loss = cross_entropy(model, X, num_x)
         val_loss   = cross_entropy(model, X_val, num_x)
         train_losses.append(train_loss)
@@ -407,8 +408,12 @@ def train_rbm(train_file, val_file=None, save_W=False, hidden_size=100, epoch=30
         print t, train_loss
         #for x in X:
         #    x = x.reshape((num_x, 1))
-        X_neg, _ = gibbs_sampling(X, model)
-        rbm_update(model, X, X_neg, learning_rate)
+        # mini-batch version
+        for i in xrange(iter_times):
+            rows = np.random.permutation(train_size)[:batch_size]
+            X_ = X[:, rows]
+            X_neg, _ = gibbs_sampling(X_, model)
+            rbm_update(model, X_, X_neg, learning_rate)
     plot_W(W.T)
     if val_file:
         plot_train_val_loss(train_losses, val_losses)
