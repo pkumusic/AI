@@ -6,6 +6,8 @@ logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
                     datefmt='%m-%d %H:%M')
 
+import cPickle as pickle
+
 def readData(file):
     # read the data from the file
     # the outputs are data and label matrix
@@ -38,7 +40,7 @@ def plotData(X):
         plt.imshow(image, cmap='Greys_r')
         plt.show()
 
-def train_one_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden_size=[200],
+def train_one_layer(train_file, file_name="",W1=None, W2=None, epoch=1000, learning_rate=0.5, seed=2016, hidden_size=[200],
                     output_size=10, show_stats=True, val_file=None, test_file=None,
                     L=False, L_lambda=0, plot=True, display_epoch=10, momentum=0.5, dropout=0.5):
     model = {}
@@ -53,8 +55,10 @@ def train_one_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden
     [num_h1]  = hidden_size # hidden layer size and output layer size
     num_o = output_size
     # Initialization
-    W1 = initialize_weights(num_h0, num_h1)  # [h0 * h1]
-    W2 = initialize_weights(num_h1, num_o)
+    if W1 == None:
+        W1 = initialize_weights(num_h0, num_h1)  # [h0 * h1]
+    if W2 == None:
+        W2 = initialize_weights(num_h1, num_o)
     b1 = initialize_biases(num_h1)
     b2 = initialize_biases(num_o)
     model['W1'], model['W2'], model['b1'], model['b2'] = W1, W2, b1, b2
@@ -64,8 +68,10 @@ def train_one_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden
     if show_stats:
         loss_trains = []
         loss_vals = []
+        loss_tests = []
         err_trains = []
         err_vals = []
+        err_tests = []
     # Training
 
     for i in xrange(epoch):
@@ -87,8 +93,8 @@ def train_one_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden
                 [_, _, _, o_test] = fprop(X_test, model, dropout, deterministic=True)
                 loss_test = - np.sum(np.log(o_test) * Y_test) / Y_test.shape[0]
                 err_test = precision(predict(o_test), y_test)
-                loss_vals.append(loss_test)
-                err_vals.append(err_test)
+                loss_tests.append(loss_test)
+                err_tests.append(err_test)
 
             if i % display_epoch == 0:
                 print i, "th Training loss:", loss_train
@@ -115,9 +121,9 @@ def train_one_layer(train_file, epoch=1000, learning_rate=0.5, seed=2016, hidden
         pre_W2_g, pre_b2_g, pre_W1_g, pre_b1_g = W2_g, b2_g, W1_g, b1_g
 
     if plot:
-        #plot_train_val_loss(loss_trains, loss_vals)
-        #plot_train_val_err(err_trains, err_vals)
-        plot_W(W1)
+        #plot_train_val_loss(loss_trains, loss_vals, "pretrain")
+        plot_train_val_err(err_trains, err_vals, file_name)
+        #plot_W(W1, "pretrain")
     return model
 
 
@@ -236,15 +242,17 @@ def plot_train_val_loss(trains, vals, file_name):
     #plt.show()
     fig.savefig(file_name+'_loss.png')
 
-def plot_train_val_err(trains, vals):
+def plot_train_val_err(trains, vals, file_name):
     import matplotlib.pyplot as plt
     from matplotlib.legend_handler import HandlerLine2D
+    fig = plt.figure()
     l1,=plt.plot(trains, label = 'Train')
     l2,=plt.plot(vals, label = 'Validation')
     plt.ylabel('Classification Error')
     plt.xlabel('#Epochs')
     plt.legend()
-    plt.show()
+    #plt.show()
+    fig.savefig(file_name + '_error.png')
 
 def loss(predict, true):
     return - np.sum(np.log(predict) * true) / true.shape[0]
@@ -383,7 +391,18 @@ def initialize_weights(h_prev, h):
 def initialize_biases(h):
     return np.zeros((1,h))
 
-def train_rbm(train_file, val_file=None, save_W=False, batch_size=10, hidden_size=500, epoch=300, learning_rate=0.1, seed=1, CD_k=1):
+def rbm_sample(path):
+    model = {}
+    model['c'] = np.load("c_" + path)
+    model['b'] = np.load("b_" + path)
+    model['W'] = np.load("W_" + path)
+    X = np.empty((784, 100))
+    X.fill(0.5)
+    X = np.random.binomial(1, X)
+    x, h = gibbs_sampling(X, model, k=1000)
+    plot_W(x, "rbm_sampling")
+
+def train_rbm(train_file, val_file=None, save_W=False, batch_size=10, hidden_size=100, epoch=100, learning_rate=0.1, seed=1, CD_k=1):
     model = {}
     np.random.seed(seed)
     X, Y, y = readData(train_file)
@@ -422,7 +441,11 @@ def train_rbm(train_file, val_file=None, save_W=False, batch_size=10, hidden_siz
     if val_file:
         plot_train_val_loss(train_losses, val_losses, file_name)
     if save_W:
-        np.save("W_"+file_name, W)
+        np.save('W_'+file_name, W)
+        np.save('c_' + file_name, c)
+        np.save('b_' + file_name, b)
+
+
 
 
 def cross_entropy(model, X, num_x, CD_k):
@@ -464,18 +487,21 @@ def binarize(X):
 
 
 
-def autoencoder(train_file, epoch=1000, learning_rate=0.5, seed=1, hidden_size=[100],
-                    output_size=10, show_stats=True, val_file=None, test_file=None,
-                    L=False, L_lambda=0, plot=True, display_epoch=10, momentum=0.5, dropout=0.5):
+def autoencoder(train_file, denoising=0.25, epoch=100, batch_size=10, learning_rate=0.1, seed=1, hidden_size=[500],
+                    output_size=784, show_stats=True, val_file=None,
+                    L=False, L_lambda=0, plot=True, display_epoch=10, momentum=0.5, dropout=0):
     model = {}
     np.random.seed(seed)
     X, _, _ = readData(train_file)
+    X = binarize(X)
     Y = X  # Reconstruction
     if val_file:
         X_val, _, _ = readData(val_file)
+        X_val = binarize(X_val)
         Y_val = X_val
     # Single hidden layer, we have two W's and b's
     num_d, num_h0 = X.shape[0], X.shape[1] # data number and feature number
+    iter_times = int(num_d / batch_size)
     [num_h1]  = hidden_size # hidden layer size and output layer size
     num_o = output_size
     # Initialization
@@ -490,45 +516,102 @@ def autoencoder(train_file, epoch=1000, learning_rate=0.5, seed=1, hidden_size=[
     if show_stats:
         loss_trains = []
         loss_vals = []
-        err_trains = []
-        err_vals = []
     # Training
 
     for i in xrange(epoch):
         # Show stats
         if show_stats:
-            [_, _, _, o] = fprop(X, model, dropout, deterministic=True)
-            loss_train = loss(o, Y)
-            #print i, "th Training loss:", loss_train
-            #print precision(predict(o), y)
+            [_, _, _, o] = fprop_auto(X, model, dropout, deterministic=True)
+            loss_train = loss_auto(o, Y)
             if val_file:
-                [_, _, _, o_val] = fprop(X_val, model, dropout, deterministic=True)
-                loss_val = - np.sum(np.log(o_val) * Y_val) / Y_val.shape[0]
+                [_, _, _, o_val] = fprop_auto(X_val, model, dropout, deterministic=True)
+                loss_val = loss_auto(o_val, Y_val)
                 loss_vals.append(loss_val)
 
             if i % display_epoch == 0:
                 print i, "th Training loss:", loss_train
                 if val_file:
                     print i, "th validation loss:", loss_val
-            
+
             loss_trains.append(loss_train)
 
-        [a1, h1, a2, o] = fprop(X, model, dropout)
-        # update
-        W2_g, b2_g, W1_g, b1_g = bprop(X, model, a1, h1, a2, o, Y, L=L, L_lambda=L_lambda)
-        W2 -= (W2_g + momentum * pre_W2_g) * learning_rate
-        b2 -= (b2_g + momentum * pre_b2_g) * learning_rate
-        W1 -= (W1_g + momentum * pre_W1_g) * learning_rate
-        b1 -= (b1_g + momentum * pre_b1_g) * learning_rate
+        # mini-batch
+        for i in xrange(iter_times):
+            rows = np.random.permutation(num_d)[:batch_size]
+            X_ = X[rows, :]
+            if denoising:
+                m = np.random.choice(2, X_.shape, p=[denoising, 1-denoising])
+                X_noise = m * X_
+            Y_ = X_
+            if denoising:
+                [a1, h1, a2, o] = fprop_auto(X_noise, model, dropout)
+            else:
+                [a1, h1, a2, o] = fprop_auto(X_, model, dropout)
+            # update
+            if denoising:
+                W2_g, b2_g, W1_g, b1_g = bprop_auto(X_noise, model, a1, h1, a2, o, Y_, L=L, L_lambda=L_lambda)
+            else:
+                W2_g, b2_g, W1_g, b1_g = bprop_auto(X_, model, a1, h1, a2, o, Y_, L=L, L_lambda=L_lambda)
+            W2 -= (W2_g + momentum * pre_W2_g) * learning_rate
+            b2 -= (b2_g + momentum * pre_b2_g) * learning_rate
+            W1 -= (W1_g + momentum * pre_W1_g) * learning_rate
+            b1 -= (b1_g + momentum * pre_b1_g) * learning_rate
 
-        pre_W2_g, pre_b2_g, pre_W1_g, pre_b1_g = W2_g, b2_g, W1_g, b1_g
+            pre_W2_g, pre_b2_g, pre_W1_g, pre_b1_g = W2_g, b2_g, W1_g, b1_g
 
     if plot:
-        #plot_train_val_loss(loss_trains, loss_vals)
-        #plot_train_val_err(err_trains, err_vals)
-        plot_W(W1)
+        file_name = "autoencoder_h" + str(learning_rate) + "_e" + str(epoch) + "_h" + str(hidden_size)
+        if denoising:
+            file_name = "deno_" + str(denoising) + file_name
+        plot_train_val_loss(loss_trains, loss_vals, file_name)
+        plot_W(W1, file_name)
+        np.save("W1_"+file_name, W1)
+        np.save("W2_"+file_name, W2)
     return model
 
+def fprop_auto(X, model, dropout, deterministic=False):
+    # Deterministic is True for testing and false for training
+    W1, W2, b1, b2 = model['W1'], model['W2'], model['b1'], model['b2']
+    g = sigmoid
+    a1 = np.dot(X, W1) + b1
+
+    if not deterministic:
+        # Training Time
+        m1 = np.random.choice(2, a1.shape, p=[dropout, 1-dropout])
+    else:
+        m1 = np.empty(a1.shape)
+        m1.fill(1-dropout)
+    h1 = g(a1) * m1
+    a2 = np.dot(h1, W2) + b2
+    o  = g(a2)
+    return [a1, h1, a2, o]
+
+def bprop_auto(X, model, a1, h1, a2, o, Y, L=False, L_lambda=0):
+    # computer gradients
+    # softmax loss is defaulted here
+    W1, W2, b1, b2 = model['W1'], model['W2'], model['b1'], model['b2']
+    num_data = X.shape[0]
+
+    a2_g = - (sigmoid(1-a2) * Y - sigmoid(a2) * (1-Y))/ num_data # gradient of softmax loss [data * o]
+    W2_g = np.dot(h1.T, a2_g) # [h1 * data] [data * o]
+    b2_g = np.sum(a2_g, axis=0, keepdims=True) # [1 * o]
+
+    h1_g = np.dot(a2_g, W2.T)  # [data * o, o * h1]
+    a1_g = h1_g * sigmoid_grad(a1)
+    W1_g = np.dot(X.T, a1_g) # [h0 * h1]
+    b1_g = np.sum(a1_g, axis=0, keepdims=True) # [1 * o]
+
+    if L == "L2":
+        W2_g += L_lambda * 2 * W2
+        W1_g += L_lambda * 2 * W1
+    if L == "L1":
+        W2_g += L_lambda * np.sign(W2)
+        W1_g += L_lambda * np.sign(W1)
+
+    return W2_g, b2_g, W1_g, b1_g
+
+def loss_auto(predict, true):
+    return - (np.sum(np.log(predict) * true) + np.sum(np.log(1-predict) * (1-true))) / true.shape[0]
 
 
 
@@ -537,12 +620,15 @@ if __name__ == "__main__":
     val_file = "../DNN/data/digitsvalid.txt"
     test_file = "../DNN/data/digitstest.txt"
     #train_rbm(train_file, val_file=val_file, save_W=True)
-    autoencoder(train_file, epoch=2000, learning_rate=0.1, seed=0, hidden_size=[50],
-                   output_size=100, show_stats=True, val_file=val_file, test_file=None,
-                   L="L2", L_lambda=0.001, plot=True, display_epoch=10, momentum=0.5, dropout=0)
-    #train_one_layer(train_file, epoch=2000, learning_rate=0.1, seed=0, hidden_size=[50],
-    #                output_size=10, show_stats=True, val_file=val_file, test_file=test_file,
-    #                L="L2", L_lambda=0.001, plot=True, display_epoch=10, momentum=0.5, dropout=0)
+    #autoencoder(train_file, val_file=val_file)
+    #path = "h100_l0.1_e100_b10_k1.npy"
+    #rbm_sample(path)
+    #W1 = np.load('W1_deno_0.25autoencoder_h0.1_e100_h[100].npy')
+    #W1 = np.load('W_h100_l0.1_e100_b10_k1.npy').T
+    W1 = np.load("W1_autoencoder_h0.1_e100_h[100].npy")
+    train_one_layer(train_file, W1=W1, file_name="auto", epoch=2000, learning_rate=0.1, seed=0, hidden_size=[100],
+                    output_size=10, show_stats=True, val_file=val_file, test_file=test_file,
+                    L=None, L_lambda=0, plot=True, display_epoch=10, momentum=0.5, dropout=0)
     #plotData(X)
 
     #train_two_layer(train_file, epoch=2000, learning_rate=0.5, seed=2016, hidden_size=[100,100],
