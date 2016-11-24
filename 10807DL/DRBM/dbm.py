@@ -452,10 +452,25 @@ def train_rbm(train_file, val_file=None, save_W=False, batch_size=10, hidden_siz
 #         self.num_h2 = num_h2
 
 
-
+def dbm_sample(path, use_bias):
+    model = {}
+    model['W1'] = np.load("W1_" + path + '.npy')
+    model['W2'] = np.load("W2_" + path + '.npy')
+    if use_bias:
+        model['b0'] = np.load("b0_" + path + '.npy')
+        model['b1'] = np.load("b1_" + path + '.npy')
+        model['b2'] = np.load("b2_" + path + '.npy')
+    v = np.empty((784, 100))
+    v.fill(0.5)
+    v = np.random.binomial(1, v)
+    h2 = np.empty((400,100))
+    h2.fill(0.5)
+    h2 = np.random.binomial(1, h2)
+    v, h1, h2 = dbm_gibbs_sampling(v, h2, h2, model, 1000, use_bias)
+    plot_W(v, path + "dbm_sampling" + str(use_bias))
 
 def train_dbm(train_file, val_file=None, save_W=False,
-              batch_size=10, num_h1=100, num_h2=100,
+              plot=False, batch_size=10, num_h1=100, num_h2=100,
               epoch=100, learning_rate=0.01, seed=1,
               K=100, mean_field_update=10, gibbs_update=1,
               use_bias=False):
@@ -478,6 +493,11 @@ def train_dbm(train_file, val_file=None, save_W=False,
     W1 = initialize_weights(num_v, num_h1)  # 784 * 100
     W2 = initialize_weights(num_h1, num_h2)
     #TODO: Add bias
+    if use_bias:
+        b0 = initialize_biases(num_v).reshape(-1,1)
+        b1 = initialize_biases(num_h1).reshape(-1,1)
+        b2 = initialize_biases(num_h2).reshape(-1,1)
+        model['b0'], model['b1'], model['b2'] = b0, b1, b2
 
     # Initialize persistent chains
     v_neg =  np.random.binomial(1, 0.5, (num_v, K))
@@ -488,57 +508,92 @@ def train_dbm(train_file, val_file=None, save_W=False,
     if val_file:
         val_losses = []
     for t in xrange(epoch):
-        train_loss = dbm_cross_entropy(model, X, num_h2)
-        val_loss   = dbm_cross_entropy(model, X, num_h2)
+        train_loss = dbm_cross_entropy(model, X, num_h2, use_bias)
+        val_loss   = dbm_cross_entropy(model, X_val, num_h2, use_bias)
         train_losses.append(train_loss)
         if val_file:
             val_losses.append(val_loss)
-        print t, train_loss
+        print t, train_loss, val_loss
         # mini-batch mode
         for i in xrange(iter_times):
             rows = np.random.permutation(train_size)[:batch_size]
             v = X[:, rows]
-            v_neg, h1_neg, h2_neg = dbm_gibbs_sampling(v_neg, h1_neg, h2_neg, model, gibbs_update)
-            mu1, mu2 = mean_field_dbm_gibbs_sampling(v, num_h1, num_h2, model, mean_field_update, )
+            v_neg, h1_neg, h2_neg = dbm_gibbs_sampling(v_neg, h1_neg, h2_neg, model, gibbs_update, use_bias)
+            mu1, mu2 = mean_field_dbm_gibbs_sampling(v, num_h1, num_h2, model, mean_field_update, use_bias)
             # Update model
             W1 += learning_rate * (v.dot(mu1.T)/v.shape[1] - v_neg.dot(h1_neg.T)/v_neg.shape[1])
             W2 += learning_rate * (mu1.dot(mu2.T) / mu1.shape[1] - h1_neg.dot(h2_neg.T) / h1_neg.shape[1])
+            if use_bias:
+                h1v =  sigmoid(np.dot(W1.T, v) + np.dot(W2, mu2) + b1)
+                h1v_neg = sigmoid(np.dot(W1.T, v_neg) + np.dot(W2, h2_neg) + b1)
+                h2v = sigmoid(np.dot(W2.T, mu1) + b2)
+                h2v_neg = sigmoid(np.dot(W2.T, h1_neg) + b2)
+                b0 += learning_rate * (np.sum(v, axis=1, keepdims=True)/v.shape[1] - np.sum(v_neg, axis=1, keepdims=True)/v_neg.shape[1])
+                b1 += learning_rate * (np.sum(h1v, axis=1, keepdims=True)/h1v.shape[1] - np.sum(h1v_neg, axis=1, keepdims=True)/h1v_neg.shape[1])
+                b2 += learning_rate * (np.sum(h2v, axis=1, keepdims=True)/h2v.shape[1] - np.sum(h2v_neg, axis=1, keepdims=True)/h2v_neg.shape[1])
     file_name = "h1" + str(num_h1) + '_h2' + str(num_h2)+\
                 "_l" + str(learning_rate) + "_e" + str(epoch) + \
-                "_b" + str(batch_size) + "_k" + str(K)
+                "_b" + str(batch_size) + "_k" + str(K) + "_bias" + str(use_bias)
     if val_file:
         plot_train_val_loss(train_losses, val_losses, file_name)
+    if save_W:
+        np.save('W1_'+file_name, W1)
+        np.save('W2_'+file_name, W2)
+        if use_bias:
+            np.save('b0_' + file_name, b0)
+            np.save('b1_' + file_name, b1)
+            np.save('b2_' + file_name, b2)
+    if plot:
+        plot_W(W1, file_name)
 
-def dbm_cross_entropy(model, v, num_h2):
+def dbm_cross_entropy(model, v, num_h2, use_bias):
     W1, W2 = model['W1'], model['W2']
+    if use_bias:
+        b0, b1, b2 = model['b0'], model['b1'], model['b2']
     h2 = np.random.rand(num_h2, v.shape[1])
     accum = 0
-    _, h1, _ = dbm_gibbs_sampling(v, h2, h2, model, 1)
-    v_pred = sigmoid(np.dot(W1, h1))
+    _, h1, _ = dbm_gibbs_sampling(v, h2, h2, model, 1, use_bias)
+    if not use_bias:
+        v_pred = sigmoid(np.dot(W1, h1))
+    else: v_pred = sigmoid(np.dot(W1, h1) + b0)
     accum += np.sum(v * np.log(v_pred))
     accum += np.sum((1 - v) * np.log(1 - v_pred))
     accum /= v.shape[1]
     return -accum
 
-def dbm_gibbs_sampling(v, h1, h2, model, iter_times):
+def dbm_gibbs_sampling(v, h1, h2, model, iter_times, use_bias):
     W1, W2 = model['W1'], model['W2']
+    if use_bias:
+        b0, b1, b2 = model['b0'], model['b1'], model['b2']
     for i in xrange(iter_times):
-        h1 = sigmoid(np.dot(W1.T, v) + np.dot(W2, h2))
+        if not use_bias:
+            h1 = sigmoid(np.dot(W1.T, v) + np.dot(W2, h2))
+        else: h1 = sigmoid(np.dot(W1.T, v) + np.dot(W2, h2) + b1)
         h1 = np.random.binomial(1, h1)
-        h2 = sigmoid(np.dot(W2.T, h1))
+        if not use_bias:
+            h2 = sigmoid(np.dot(W2.T, h1))
+        else: h2 = sigmoid(np.dot(W2.T, h1) + b2)
         h2 = np.random.binomial(1, h2)
-        v = sigmoid(np.dot(W1, h1))
+        if not use_bias:
+            v = sigmoid(np.dot(W1, h1))
+        else: v = sigmoid(np.dot(W1, h1) + b0)
         v = np.random.binomial(1, v)
     return v,h1,h2
 
-def mean_field_dbm_gibbs_sampling(v, num_h1, num_h2, model, iter_times):
+def mean_field_dbm_gibbs_sampling(v, num_h1, num_h2, model, iter_times, use_bias):
     W1, W2 = model['W1'], model['W2']
+    if use_bias:
+        b0, b1, b2 = model['b0'], model['b1'], model['b2']
     batch_size = v.shape[1]
     mu1 = np.random.rand(num_h1, batch_size)
     mu2 = np.random.rand(num_h2, batch_size)
     for i in xrange(iter_times):
-        mu1 = sigmoid(np.dot(W1.T, v) + np.dot(W2, mu2))
-        mu2 = sigmoid(np.dot(W2.T, mu1))
+        if not use_bias:
+            mu1 = sigmoid(np.dot(W1.T, v) + np.dot(W2, mu2))
+            mu2 = sigmoid(np.dot(W2.T, mu1))
+        else:
+            mu1 = sigmoid(np.dot(W1.T, v) + np.dot(W2, mu2) + b1)
+            mu2 = sigmoid(np.dot(W2.T, mu1) + b2)
     return mu1, mu2
 
 
@@ -709,7 +764,8 @@ if __name__ == "__main__":
     train_file = "../DNN/data/digitstrain.txt"
     val_file = "../DNN/data/digitsvalid.txt"
     test_file = "../DNN/data/digitstest.txt"
-    train_dbm(train_file, val_file=val_file)
+    train_dbm(train_file, val_file=val_file, save_W=True, plot=True, use_bias=True, batch_size=10, num_h1=400, num_h2=400)
+    #dbm_sample('h1400_h2400_l0.01_e100_b10_k100_biasTrue', True)
     #train_rbm(train_file, val_file=val_file, save_W=True)
     #autoencoder(train_file, val_file=val_file)
     #path = "h100_l0.1_e100_b10_k1.npy"
